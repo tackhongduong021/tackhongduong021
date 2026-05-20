@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Web Novel Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Be+Vietnam+Pro:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    :root { --accent:#10b981; --accent-dk:#059669; --navy:#0f172a; --font-size:17px; }
+    * { box-sizing:border-box; }
+    body { font-family:'Be Vietnam Pro',sans-serif; background:#f8f8f6; }
+    .font-lora { font-family:'Lora',Georgia,serif; }
+
+    /* Reader themes */
+    .theme-light { background:#f7f5f2!important; color:#1a1a1a!important; }
+    .theme-sepia  { background:#f5eedd!important; color:#3b2c1a!important; }
+    .theme-dark   { background:#18181b!important; color:#e4e4e7!important; }
+    .theme-light .reader-bar { background:#fff; border-color:#e5e7eb; }
+    .theme-sepia  .reader-bar { background:#ede5d0; border-color:#d4c9a8; }
+    .theme-dark   .reader-bar { background:#27272a; border-color:#3f3f46; }
+    .theme-dark   .nav-btn { color:#a1a1aa; border-color:#3f3f46; }
+    .theme-dark   .nav-btn:hover:not(:disabled) { background:#3f3f46; color:#e4e4e7; }
+    .theme-dark   .nav-btn:disabled { color:#52525b; border-color:#27272a; }
+    .theme-dark   .toc-btn { color:var(--accent); border-color:#065f46; }
+    .theme-dark   .toc-btn:hover { background:#064e3b; }
+    .theme-dark   .toolbar-pill { border-color:#3f3f46; color:#a1a1aa; background:transparent; }
+    .theme-dark   .toolbar-pill:hover { background:#3f3f46; color:#e4e4e7; }
+
+    #chapter-body { font-size:var(--font-size); line-height:1.95; }
+    #chapter-body p { margin-bottom:1.3em; text-indent:1.5em; }
+    #chapter-body p:first-child { text-indent:0; }
+
+    .toc-row { transition:background .14s,transform .14s; cursor:pointer; }
+    .toc-row:hover { background:rgba(16,185,129,.07); transform:translateX(4px); }
+
+    .ch-card { transition:box-shadow .2s,transform .2s; }
+    .ch-card:hover { box-shadow:0 8px 24px rgba(0,0,0,.10); transform:translateY(-2px); }
+
+    .theme-dot.active { box-shadow:0 0 0 2.5px #fff,0 0 0 4.5px var(--accent); }
+
+    #modal-overlay { transition:opacity .2s; }
+
+    ::-webkit-scrollbar { width:5px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:#d1d5db; border-radius:4px; }
+    .theme-dark ::-webkit-scrollbar-thumb { background:#52525b; }
+
+    @keyframes soft-pulse { 0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,.35);}50%{box-shadow:0 0 0 8px rgba(16,185,129,0);} }
+    #continue-btn { animation:soft-pulse 2.8s infinite; }
+
+    .synopsis-clamped { display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden; }
+
+    .status-pill { font-size:10px;font-weight:600;letter-spacing:.05em;padding:2px 8px;border-radius:99px;text-transform:uppercase; }
+
+    #admin-fab {
+      position:fixed;bottom:24px;right:24px;z-index:100;width:44px;height:44px;border-radius:99px;
+      background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;
+      cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.25);transition:background .2s,transform .2s;
+    }
+    #admin-fab:hover { background:#1e293b; transform:scale(1.08); }
+
+    #toast {
+      position:fixed;bottom:80px;right:24px;z-index:999;padding:10px 18px;border-radius:10px;
+      background:var(--navy);color:#fff;font-size:13px;font-weight:500;
+      opacity:0;transition:opacity .3s;pointer-events:none;
+    }
+    #toast.show { opacity:1; }
+
+    .content-ta { font-family:'Lora',Georgia,serif;font-size:14px;line-height:1.7; }
+
+    @keyframes fadeUp { from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);} }
+    .fade-up { animation:fadeUp .35s ease both; }
+    .d1 { animation-delay:.05s; } .d2 { animation-delay:.12s; }
+
+    .view { display:block; }
+    .view.hidden { display:none; }
+  </style>
+</head>
+<body>
+
+<!-- ── Floating Admin Toggle ── -->
+<div id="admin-fab" onclick="showAdmin()" title="Mở bảng quản trị">
+  <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536M9 11l6.586-6.586a2 2 0 012.828 0l.172.172a2 2 0 010 2.828L12 14H9v-3z"/>
+    <path stroke-linecap="round" stroke-linejoin="round" d="M3 21h18"/>
+  </svg>
+</div>
+
+<!-- ── Toast ── -->
+<div id="toast"></div>
+
+<!-- ══════════════════════════════════════════
+     MODAL — Create / Edit Chapter
+══════════════════════════════════════════ -->
+<div id="modal-overlay" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden"
+  style="background:rgba(0,0,0,.45);" onclick="overlayClose(event)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <h3 id="modal-heading" class="font-lora text-lg font-semibold text-gray-900">Tạo chương mới</h3>
+      <button onclick="closeModal()" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+      <input type="hidden" id="edit-id" />
+      <div>
+        <label class="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1.5">Tiêu đề chương</label>
+        <input id="form-title" type="text" placeholder="Chương 1: Tựa đề..."
+          class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 transition" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1.5">
+          Nội dung <span class="ml-1 font-normal normal-case text-gray-400">(dòng trống = đoạn mới)</span>
+        </label>
+        <textarea id="form-content" rows="14"
+          placeholder="Nhập nội dung chương tại đây...&#10;&#10;Mỗi đoạn văn cách nhau bằng một dòng trống.&#10;&#10;Hệ thống tự động bọc <p> khi lưu."
+          class="content-ta w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 transition resize-none"></textarea>
+      </div>
+    </div>
+    <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+      <button onclick="closeModal()" class="px-4 py-2 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-100 transition-colors">Huỷ</button>
+      <button id="modal-submit" onclick="submitChapter()"
+        class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors"
+        style="background:var(--accent);"
+        onmouseover="this.style.background='var(--accent-dk)'"
+        onmouseout="this.style.background='var(--accent)'">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12l5 5L20 7"/></svg>
+        Xuất bản
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     VIEW 1 — ADMIN DASHBOARD
+══════════════════════════════════════════ -->
+<div id="view-admin" class="view hidden min-h-screen" style="background:#f0f4f8;">
+
+  <header style="background:var(--navy);" class="px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:var(--accent);">
+        <svg width="15" height="15" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+      </div>
+      <div>
+        <p class="text-white font-semibold text-sm leading-none">Bảng Quản Trị</p>
+        <p class="text-xs mt-0.5" style="color:rgba(255,255,255,.4)">Quản lý nội dung truyện</p>
+      </div>
+    </div>
+    <button onclick="showHome()"
+      class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+      style="background:rgba(255,255,255,.1);color:rgba(255,255,255,.85);"
+      onmouseover="this.style.background='rgba(255,255,255,.18)'"
+      onmouseout="this.style.background='rgba(255,255,255,.1)'">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+      Trang công khai
+    </button>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+
+    <!-- Book Settings -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-8">
+      <h2 class="font-lora text-base font-semibold text-gray-800 mb-4 flex items-center gap-2">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:var(--accent)"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+        Thông tin truyện
+      </h2>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Tên truyện</label>
+          <input id="ab-title" type="text" placeholder="Nhập tên truyện..." class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 transition" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Tác giả</label>
+          <input id="ab-author" type="text" placeholder="Tên tác giả..." class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 transition" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Trạng thái</label>
+          <select id="ab-status" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 transition bg-white">
+            <option value="Đang ra">Đang ra</option>
+            <option value="Hoàn thành">Hoàn thành</option>
+            <option value="Tạm dừng">Tạm dừng</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Giới thiệu / Synopsis</label>
+        <textarea id="ab-synopsis" rows="3" placeholder="Nhập phần giới thiệu truyện..." class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 transition resize-none"></textarea>
+      </div>
+      <div class="mt-3 flex justify-end">
+        <button onclick="saveBookInfo()" class="px-4 py-2 rounded-xl text-sm font-semibold text-white transition-colors"
+          style="background:var(--accent);"
+          onmouseover="this.style.background='var(--accent-dk)'"
+          onmouseout="this.style.background='var(--accent)'">Lưu thông tin</button>
+      </div>
+    </div>
+
+    <!-- Chapter Grid -->
+    <div class="flex items-center justify-between mb-5">
+      <h2 class="font-lora text-lg font-semibold text-gray-800">
+        Danh sách chương
+        <span id="admin-count" class="ml-2 text-sm font-normal text-gray-400"></span>
+      </h2>
+      <button onclick="openModal(null)"
+        class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-sm"
+        style="background:var(--accent);"
+        onmouseover="this.style.background='var(--accent-dk)'"
+        onmouseout="this.style.background='var(--accent)'">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+        Thêm chương
+      </button>
+    </div>
+
+    <div id="admin-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+
+    <div id="admin-empty" class="hidden text-center py-16">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gray-100 flex items-center justify-center">
+        <svg width="28" height="28" fill="none" stroke="#9ca3af" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+      </div>
+      <p class="text-gray-400 text-sm">Chưa có chương nào. Bấm "Thêm chương" để bắt đầu.</p>
+    </div>
+  </main>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     VIEW 2 — PUBLIC HOME
+══════════════════════════════════════════ -->
+<div id="view-home" class="view min-h-screen" style="background:#f8f8f6;">
+
+  <header class="bg-white border-b border-gray-100 sticky top-0 z-20 shadow-sm">
+    <div class="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
+      <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style="background:var(--accent);">
+        <svg width="13" height="13" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+      </div>
+      <span class="font-semibold text-gray-800 tracking-wide text-sm">ĐỌC TRUYỆN ONLINE</span>
+    </div>
+  </header>
+
+  <main class="max-w-3xl mx-auto px-4 py-8">
+
+    <!-- Book Info Card -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6 fade-up">
+      <div class="flex gap-5 items-start">
+        <div class="flex-shrink-0 w-24 h-36 rounded-xl shadow-md flex items-center justify-center overflow-hidden"
+          style="background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 50%,var(--accent) 100%);">
+          <span class="text-3xl">📕</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <h1 id="pub-title" class="font-lora text-xl font-bold text-gray-900 leading-tight mb-1"></h1>
+          <p class="text-sm text-gray-500 mb-0.5">
+            <span class="font-medium text-gray-600">Tác giả:</span>
+            <span id="pub-author" class="ml-1"></span>
+          </p>
+          <p class="text-sm text-gray-500 mb-3">
+            <span class="font-medium text-gray-600">Trạng thái:</span>
+            <span id="pub-status" class="ml-1 status-pill" style="background:#d1fae5;color:#065f46;"></span>
+          </p>
+          <button id="continue-btn"
+            class="hidden items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold transition-colors"
+            style="background:var(--accent);"
+            onmouseover="this.style.background='var(--accent-dk)'"
+            onmouseout="this.style.background='var(--accent)'"
+            onclick="continueReading()">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Đọc tiếp:&nbsp;<span id="continue-label" class="font-normal opacity-90 truncate max-w-[130px]"></span>
+          </button>
+        </div>
+      </div>
+      <div class="mt-5 pt-5 border-t border-gray-100">
+        <p class="text-xs font-semibold uppercase tracking-widest mb-2" style="color:var(--accent);">Giới thiệu</p>
+        <div id="pub-synopsis" class="synopsis-clamped text-sm text-gray-600 leading-relaxed"></div>
+        <button id="syn-toggle" class="mt-2 text-xs font-medium" style="color:var(--accent);" onclick="toggleSyn()">Xem thêm ▾</button>
+      </div>
+    </div>
+
+    <!-- TOC -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden fade-up d2">
+      <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+        <h2 class="font-semibold text-gray-800 text-sm flex items-center gap-2">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:var(--accent)"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h10"/></svg>
+          Mục lục chương
+        </h2>
+        <span id="pub-count" class="text-xs text-gray-400 bg-gray-100 px-2.5 py-0.5 rounded-full"></span>
+      </div>
+      <div id="pub-toc" class="divide-y divide-gray-50"></div>
+      <div id="pub-empty" class="hidden py-12 text-center text-gray-400 text-sm">Chưa có chương nào được xuất bản.</div>
+    </div>
+
+    <p class="text-center text-xs text-gray-400 mt-8 pb-4">© Bản quyền thuộc tác giả — Nền tảng đọc truyện tĩnh</p>
+  </main>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     VIEW 3 — READER
+══════════════════════════════════════════ -->
+<div id="view-reader" class="view hidden theme-light min-h-screen">
+
+  <!-- Top Nav -->
+  <nav class="reader-bar border-b sticky top-0 z-20">
+    <div class="max-w-2xl mx-auto px-4 py-2.5 flex items-center justify-between gap-2">
+      <button id="prev-top" class="nav-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed" onclick="navigate(-1)">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        <span class="hidden sm:inline text-xs">Trước</span>
+      </button>
+      <button class="toc-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors border-emerald-200 hover:bg-emerald-50" style="color:var(--accent);" onclick="showHome()">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h10"/></svg>
+        <span class="text-xs hidden sm:inline">Mục lục</span>
+      </button>
+      <button id="next-top" class="nav-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed" onclick="navigate(1)">
+        <span class="hidden sm:inline text-xs">Tiếp</span>
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Toolbar -->
+  <div class="reader-bar border-b">
+    <div class="max-w-2xl mx-auto px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+      <!-- Font Size -->
+      <div class="flex items-center gap-1.5">
+        <span class="text-xs text-gray-400 hidden sm:block">Cỡ chữ</span>
+        <button onclick="adjFont(-1)" class="toolbar-pill w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-xs font-bold transition-colors hover:bg-gray-100">A−</button>
+        <span id="font-label" class="text-xs text-gray-500 w-7 text-center tabular-nums">17</span>
+        <button onclick="adjFont(1)" class="toolbar-pill w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-xs font-bold transition-colors hover:bg-gray-100">A+</button>
+      </div>
+      <!-- Font Family -->
+      <div class="flex items-center gap-1.5">
+        <span class="text-xs text-gray-400 hidden sm:block">Font</span>
+        <button id="f-serif" onclick="setFont('serif')" class="toolbar-pill px-2.5 py-1 rounded-lg border border-gray-200 text-xs font-medium transition-colors font-lora hover:bg-gray-100">Serif</button>
+        <button id="f-sans" onclick="setFont('sans')" class="toolbar-pill px-2.5 py-1 rounded-lg border border-gray-200 text-xs font-medium transition-colors hover:bg-gray-100">Sans</button>
+      </div>
+      <!-- Theme -->
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-gray-400 hidden sm:block">Nền</span>
+        <button class="theme-dot active w-6 h-6 rounded-full border-2 border-gray-200 bg-[#f7f5f2] hover:scale-110 transition-transform" id="dot-light" onclick="setTheme('light')" title="Sáng"></button>
+        <button class="theme-dot w-6 h-6 rounded-full border-2 border-gray-200 bg-[#f5eedd] hover:scale-110 transition-transform" id="dot-sepia" onclick="setTheme('sepia')" title="Sepia"></button>
+        <button class="theme-dot w-6 h-6 rounded-full border-2 border-gray-500 bg-[#18181b] hover:scale-110 transition-transform" id="dot-dark" onclick="setTheme('dark')" title="Tối"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <article class="max-w-2xl mx-auto px-5 pt-10 pb-28">
+    <p id="ch-num" class="text-xs font-semibold uppercase tracking-widest mb-3 text-center" style="color:var(--accent);"></p>
+    <h2 id="ch-title" class="font-lora text-2xl font-bold text-center mb-10 leading-snug"></h2>
+    <div id="chapter-body" class="font-lora"></div>
+  </article>
+
+  <!-- Bottom Nav -->
+  <nav class="reader-bar border-t fixed bottom-0 left-0 right-0 z-20">
+    <div class="max-w-2xl mx-auto px-4 py-2.5 flex items-center justify-between gap-2">
+      <button id="prev-bot" class="nav-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed" onclick="navigate(-1)">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        Chương trước
+      </button>
+      <button class="toc-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors border-emerald-200 hover:bg-emerald-50" style="color:var(--accent);" onclick="showHome()">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h10"/></svg>
+        Mục lục
+      </button>
+      <button id="next-bot" class="nav-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed" onclick="navigate(1)">
+        Chương tiếp
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+  </nav>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════ -->
+<script>
+/* ═══════════ DEFAULT DATA ═══════════ */
+const DEFAULT_BOOK = {
+  title:    "Tên Truyện Của Bạn",
+  author:   "Tên Tác Giả",
+  status:   "Đang ra",
+  synopsis: "Đây là phần giới thiệu nội dung truyện. Hãy mô tả câu chuyện, nhân vật chính và những điểm hấp dẫn của tác phẩm tại đây.\n\nBạn có thể chỉnh sửa nội dung này trong Bảng Quản Trị bằng cách bấm vào biểu tượng bút ở góc dưới bên phải màn hình."
+};
+
+const SEED_CHAPTERS = [
+  {
+    id:1, title:"Chương 1: Khởi đầu một hành trình",
+    content:`<p>Đây là đoạn văn đầu tiên của chương một. Hãy thay thế nội dung này bằng văn bản thực của bạn thông qua Bảng Quản Trị (biểu tượng bút ở góc dưới phải).</p>
+<p>Mỗi đoạn văn được bọc trong thẻ &lt;p&gt;, giúp hiển thị đẹp mắt trên trang đọc truyện với khoảng cách dòng thoải mái và typography chuyên nghiệp.</p>
+<p>Đây là đoạn văn thứ ba — nội dung mẫu để bạn hình dung cách bố cục thực tế khi người đọc mở truyện.</p>`,
+    likes:0, comments:0
+  },
+  {
+    id:2, title:"Chương 2: Những điều chưa biết",
+    content:`<p>Chương hai bắt đầu tại đây. Câu chuyện tiếp tục từ nơi chương một kết thúc, dẫn dắt người đọc vào sâu hơn trong thế giới của tác phẩm.</p>
+<p>Nội dung được tự động định dạng khi bạn xuất bản qua Bảng Quản Trị — mỗi dòng trống sẽ tạo ra một đoạn văn mới.</p>`,
+    likes:0, comments:0
+  },
+  {
+    id:3, title:"Chương 3: Ngã rẽ bất ngờ",
+    content:`<p>Nội dung chương ba sẽ được điền vào đây. Đây là chương mẫu thứ ba để bạn thấy cách danh sách chương hiển thị trên trang chủ công khai.</p>
+<p>Bấm vào chương này từ mục lục để xem giao diện đọc truyện hoạt động đầy đủ với tất cả tính năng: đổi màu nền, tăng/giảm cỡ chữ và điều hướng giữa các chương.</p>`,
+    likes:0, comments:0
+  }
+];
+
+/* ═══════════ STATE ═══════════ */
+const LS_CH   = 'novel_chapters';
+const LS_BOOK = 'novel_book';
+const LS_LAST = 'novel_last';
+const LS_CFG  = 'novel_cfg';
+
+let chapters  = [];
+let bookInfo  = {};
+let curIdx    = 0;
+let synOpen   = false;
+let cfg       = { fontSize:17, theme:'light', fontFamily:'serif' };
+
+/* ═══════════ INIT ═══════════ */
+function init() {
+  const sc = localStorage.getItem(LS_CH);
+  chapters = sc ? JSON.parse(sc) : [...SEED_CHAPTERS];
+
+  const sb = localStorage.getItem(LS_BOOK);
+  bookInfo = sb ? JSON.parse(sb) : {...DEFAULT_BOOK};
+
+  const scfg = localStorage.getItem(LS_CFG);
+  if (scfg) cfg = {...cfg,...JSON.parse(scfg)};
+
+  applyReaderCfg();
+  showHome();
+}
+
+/* ═══════════ VIEW SWITCHING ═══════════ */
+function showHome() {
+  hide('view-admin'); show('view-home'); hide('view-reader');
+  show('admin-fab');
+  renderHome();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function showAdmin() {
+  show('view-admin'); hide('view-home'); hide('view-reader');
+  hide('admin-fab');
+  // populate book fields
+  document.getElementById('ab-title').value   = bookInfo.title   || '';
+  document.getElementById('ab-author').value  = bookInfo.author  || '';
+  document.getElementById('ab-synopsis').value = bookInfo.synopsis || '';
+  const sel = document.getElementById('ab-status');
+  sel.value = bookInfo.status || 'Đang ra';
+  renderAdmin();
+  window.scrollTo({top:0,behavior:'instant'});
+}
+
+function showReader(idx) {
+  hide('view-admin'); hide('view-home'); show('view-reader');
+  hide('admin-fab');
+  openChapter(idx);
+}
+
+function show(id){ document.getElementById(id).classList.remove('hidden'); }
+function hide(id){ document.getElementById(id).classList.add('hidden'); }
+
+/* ═══════════ RENDER HOME ═══════════ */
+function renderHome() {
+  document.title = (bookInfo.title||'Truyện') + ' | Trang Chủ';
+  document.getElementById('pub-title').textContent  = bookInfo.title  || '—';
+  document.getElementById('pub-author').textContent = bookInfo.author || '—';
+  document.getElementById('pub-status').textContent = bookInfo.status || '—';
+  document.getElementById('pub-count').textContent  = chapters.length + ' chương';
+
+  const syn = document.getElementById('pub-synopsis');
+  syn.innerHTML = (bookInfo.synopsis||'').split('\n\n').filter(Boolean)
+    .map(p=>`<p class="mb-2">${p.trim()}</p>`).join('');
+  syn.classList.toggle('synopsis-clamped', !synOpen);
+
+  // Continue Reading
+  const lastId = localStorage.getItem(LS_LAST);
+  const cbtn   = document.getElementById('continue-btn');
+  if (lastId) {
+    const idx = chapters.findIndex(c=>c.id==lastId);
+    if (idx!==-1) {
+      document.getElementById('continue-label').textContent = chapters[idx].title;
+      cbtn.classList.remove('hidden'); cbtn.classList.add('flex');
+    } else { cbtn.classList.add('hidden'); cbtn.classList.remove('flex'); }
+  } else { cbtn.classList.add('hidden'); cbtn.classList.remove('flex'); }
+
+  // TOC
+  const toc = document.getElementById('pub-toc');
+  toc.innerHTML = '';
+  if (!chapters.length) { show('pub-empty'); return; }
+  hide('pub-empty');
+  chapters.forEach((ch, idx) => {
+    const row = document.createElement('div');
+    row.className = 'toc-row px-5 py-3.5 flex items-center gap-3 group';
+    row.onclick = () => showReader(idx);
+    row.innerHTML = `
+      <span class="flex-shrink-0 w-7 h-7 rounded-lg text-xs font-semibold flex items-center justify-center" style="background:#ecfdf5;color:var(--accent);">${ch.id}</span>
+      <span class="text-sm text-gray-700 group-hover:text-gray-900 font-medium flex-1">${ch.title}</span>
+      <svg class="w-4 h-4 text-gray-300 group-hover:text-emerald-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>`;
+    toc.appendChild(row);
+  });
+}
+
+/* ═══════════ RENDER ADMIN ═══════════ */
+function renderAdmin() {
+  const grid = document.getElementById('admin-grid');
+  document.getElementById('admin-count').textContent = `(${chapters.length} chương)`;
+  grid.innerHTML = '';
+
+  if (!chapters.length) { show('admin-empty'); return; }
+  hide('admin-empty');
+
+  chapters.forEach(ch => {
+    const card = document.createElement('div');
+    card.className = 'ch-card bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-4';
+    card.innerHTML = `
+      <div class="flex items-start justify-between gap-2">
+        <div class="flex-1 min-w-0">
+          <span class="status-pill" style="background:#d1fae5;color:#065f46;">Đã đăng</span>
+          <h3 class="font-lora font-semibold text-gray-800 text-sm mt-2 leading-snug" style="-webkit-line-clamp:2;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;">${ch.title}</h3>
+        </div>
+        <div class="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold" style="background:#f0fdf4;color:var(--accent);">${ch.id}</div>
+      </div>
+      <div class="flex items-center gap-4 text-xs text-gray-400">
+        <span class="flex items-center gap-1">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+          ${ch.likes||0} lượt thích
+        </span>
+        <span class="flex items-center gap-1">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+          ${ch.comments||0} bình luận
+        </span>
+      </div>
+      <div class="flex gap-2 pt-1 border-t border-gray-50">
+        <button onclick="openModal(${ch.id})" class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536M9 11l6.586-6.586a2 2 0 012.828 0l.172.172a2 2 0 010 2.828L12 14H9v-3z"/><path stroke-linecap="round" stroke-linejoin="round" d="M3 21h18"/></svg>
+          Chỉnh sửa
+        </button>
+        <button onclick="deleteChapter(${ch.id})" class="w-9 flex items-center justify-center py-2 rounded-lg border border-red-100 text-red-400 hover:bg-red-50 transition-colors">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        </button>
+      </div>`;
+    grid.appendChild(card);
+  });
+}
+
+/* ═══════════ BOOK INFO ═══════════ */
+function saveBookInfo() {
+  bookInfo.title    = document.getElementById('ab-title').value.trim()   || bookInfo.title;
+  bookInfo.author   = document.getElementById('ab-author').value.trim()  || bookInfo.author;
+  bookInfo.status   = document.getElementById('ab-status').value;
+  bookInfo.synopsis = document.getElementById('ab-synopsis').value.trim();
+  localStorage.setItem(LS_BOOK, JSON.stringify(bookInfo));
+  toast('✓ Đã lưu thông tin truyện');
+}
+
+/* ═══════════ MODAL ═══════════ */
+function openModal(id) {
+  const overlay = document.getElementById('modal-overlay');
+  const heading = document.getElementById('modal-heading');
+  const submit  = document.getElementById('modal-submit');
+  document.getElementById('form-title').value   = '';
+  document.getElementById('form-content').value = '';
+  document.getElementById('edit-id').value      = '';
+
+  if (id !== null && id !== undefined) {
+    const ch = chapters.find(c=>c.id===id);
+    if (ch) {
+      heading.textContent = 'Chỉnh sửa chương';
+      submit.textContent  = 'Lưu thay đổi';
+      document.getElementById('form-title').value = ch.title;
+      const tmp = document.createElement('div');
+      tmp.innerHTML = ch.content;
+      const paras = Array.from(tmp.querySelectorAll('p')).map(p=>p.textContent.trim());
+      document.getElementById('form-content').value = paras.join('\n\n');
+      document.getElementById('edit-id').value = id;
+    }
+  } else {
+    heading.textContent = 'Tạo chương mới';
+    submit.innerHTML = `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12l5 5L20 7"/></svg> Xuất bản`;
+  }
+  overlay.classList.remove('hidden');
+  setTimeout(()=>document.getElementById('form-title').focus(), 80);
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+}
+function overlayClose(e) {
+  if (e.target===document.getElementById('modal-overlay')) closeModal();
+}
+
+/* ═══════════ SUBMIT CHAPTER ═══════════ */
+function submitChapter() {
+  const title   = document.getElementById('form-title').value.trim();
+  const rawText = document.getElementById('form-content').value.trim();
+  if (!title)   { alert('Vui lòng nhập tiêu đề chương.'); return; }
+  if (!rawText) { alert('Vui lòng nhập nội dung chương.'); return; }
+
+  const content = rawText.split(/\n\s*\n/).filter(s=>s.trim())
+    .map(p=>`<p>${p.trim().replace(/\n/g,' ')}</p>`).join('\n');
+
+  const eid = document.getElementById('edit-id').value;
+  if (eid) {
+    const idx = chapters.findIndex(c=>c.id==eid);
+    if (idx!==-1) { chapters[idx].title=title; chapters[idx].content=content; }
+    toast('✓ Đã cập nhật chương');
+  } else {
+    const newId = chapters.length ? Math.max(...chapters.map(c=>c.id))+1 : 1;
+    chapters.push({id:newId,title,content,likes:0,comments:0});
+    toast('✓ Chương mới đã được xuất bản');
+  }
+  persist(); closeModal(); renderAdmin();
+}
+
+function deleteChapter(id) {
+  if (!confirm('Bạn có chắc muốn xoá chương này không?')) return;
+  chapters = chapters.filter(c=>c.id!==id);
+  persist(); renderAdmin();
+  toast('Đã xoá chương');
+}
+
+/* ═══════════ READER ═══════════ */
+function openChapter(idx) {
+  if (idx<0||idx>=chapters.length) return;
+  curIdx = idx;
+  const ch = chapters[idx];
+  localStorage.setItem(LS_LAST, ch.id);
+  document.getElementById('ch-num').textContent   = `Chương ${ch.id}`;
+  document.getElementById('ch-title').textContent = ch.title;
+  document.getElementById('chapter-body').innerHTML = ch.content;
+  updateNavBtns();
+  window.scrollTo({top:0,behavior:'instant'});
+}
+
+function navigate(dir) { openChapter(curIdx+dir); }
+
+function continueReading() {
+  const lastId = localStorage.getItem(LS_LAST);
+  if (!lastId) return;
+  const idx = chapters.findIndex(c=>c.id==lastId);
+  if (idx!==-1) showReader(idx);
+}
+
+function updateNavBtns() {
+  const isFirst = curIdx===0;
+  const isLast  = curIdx===chapters.length-1;
+  ['prev-top','prev-bot'].forEach(id=>document.getElementById(id).disabled=isFirst);
+  ['next-top','next-bot'].forEach(id=>document.getElementById(id).disabled=isLast);
+}
+
+/* ═══════════ READER SETTINGS ═══════════ */
+function adjFont(d) { cfg.fontSize=Math.min(28,Math.max(13,cfg.fontSize+d)); applyReaderCfg(); }
+function setTheme(t){ cfg.theme=t; applyReaderCfg(); }
+function setFont(f) { cfg.fontFamily=f; applyReaderCfg(); }
+
+function applyReaderCfg() {
+  const reader = document.getElementById('view-reader');
+  reader.classList.remove('theme-light','theme-sepia','theme-dark');
+  reader.classList.add('theme-'+cfg.theme);
+
+  document.documentElement.style.setProperty('--font-size',cfg.fontSize+'px');
+  document.getElementById('font-label').textContent = cfg.fontSize;
+
+  const body  = document.getElementById('chapter-body');
+  const title = document.getElementById('ch-title');
+  const isSerif = cfg.fontFamily==='serif';
+  body.classList.toggle('font-lora', isSerif);
+  title.classList.toggle('font-lora', isSerif);
+  body.style.fontFamily  = isSerif ? '' : "'Be Vietnam Pro',sans-serif";
+  title.style.fontFamily = isSerif ? '' : "'Be Vietnam Pro',sans-serif";
+
+  // dots
+  ['light','sepia','dark'].forEach(t=>document.getElementById('dot-'+t).classList.toggle('active',t===cfg.theme));
+  // font btns
+  ['serif','sans'].forEach(f=>{
+    const btn=document.getElementById('f-'+f);
+    if(!btn) return;
+    const on=f===cfg.fontFamily;
+    btn.style.background  = on?'#ecfdf5':'';
+    btn.style.color       = on?'var(--accent)':'';
+    btn.style.borderColor = on?'#6ee7b7':'';
+  });
+
+  localStorage.setItem(LS_CFG, JSON.stringify(cfg));
+}
+
+/* ═══════════ SYNOPSIS TOGGLE ═══════════ */
+function toggleSyn() {
+  synOpen = !synOpen;
+  document.getElementById('pub-synopsis').classList.toggle('synopsis-clamped',!synOpen);
+  document.getElementById('syn-toggle').textContent = synOpen ? 'Thu gọn ▴' : 'Xem thêm ▾';
+}
+
+/* ═══════════ PERSIST ═══════════ */
+function persist() { localStorage.setItem(LS_CH, JSON.stringify(chapters)); }
+
+/* ═══════════ TOAST ═══════════ */
+let toastT;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(()=>el.classList.remove('show'), 2600);
+}
+
+/* ═══════════ KEYBOARD ═══════════ */
+document.addEventListener('keydown', e => {
+  const inReader  = !document.getElementById('view-reader').classList.contains('hidden');
+  const modalOpen = !document.getElementById('modal-overlay').classList.contains('hidden');
+  if (modalOpen) { if(e.key==='Escape') closeModal(); return; }
+  if (!inReader) return;
+  if (e.key==='ArrowRight'||e.key==='ArrowDown') navigate(1);
+  if (e.key==='ArrowLeft' ||e.key==='ArrowUp')   navigate(-1);
+  if (e.key==='Escape') showHome();
+});
+
+/* ── Boot ── */
+init();
+</script>
+</body>
+</html>
